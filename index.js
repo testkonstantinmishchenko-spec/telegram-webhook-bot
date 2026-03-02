@@ -49,7 +49,7 @@ app.post('/webhook', async (req, res) => {
         // Оборачиваем номер в тег <a>
         const messageHtml = `<a href="${chatLink}">№${dialogNumber}</a> ${operatorEmail} закрыт ${closedAtMoscow}`;
 
-        const telegramToken = 'В7258788827:AAHLAZK1vdJOGj_6AAqE9W6B5vUd7mUUJ_4';   // замените
+        const telegramToken = '7258788827:AAHLAZK1vdJOGj_6AAqE9W6B5vUd7mUUJ_4';   // замените
         const chatId = '-1003330015301';            // замените
         const telegramUrl = `https://api.telegram.org/bot${telegramToken}/sendMessage`;
 
