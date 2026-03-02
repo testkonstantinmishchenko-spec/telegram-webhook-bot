@@ -1,11 +1,4 @@
 const express = require('express');
-const bodyParser = require('body-parser');
-
-// Замените эти значения на свои!
-const TELEGRAM_BOT_TOKEN = '7258788827:AAHLAZK1vdJOGj_6AAqE9W6B5vUd7mUUJ_4';
-const TELEGRAM_CHAT_ID = '-1003330015301'; // Можно сделать массивом, если нужно слать в несколько чатов
-
-const express = require('express');
 const app = express();
 const port = process.env.PORT || 3000;
 
@@ -63,8 +56,8 @@ app.post('/webhook', async (req, res) => {
         const message = `№${dialogNumber} ${operatorEmail} закрыт ${closedAtMoscow}`;
 
         // Отправляем в Telegram
-        const telegramToken = 'ВАШ_ТОКЕН_БОТА';   // замените
-        const chatId = 'ВАШ_CHAT_ID';            // замените
+        const telegramToken = '7258788827:AAHLAZK1vdJOGj_6AAqE9W6B5vUd7mUUJ_4';   // замените
+        const chatId = '-1003330015301';            // замените
         const telegramUrl = `https://api.telegram.org/bot${telegramToken}/sendMessage`;
 
         const telegramResponse = await fetch(telegramUrl, {
