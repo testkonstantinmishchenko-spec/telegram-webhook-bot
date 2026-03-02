@@ -5,72 +5,91 @@ const bodyParser = require('body-parser');
 const TELEGRAM_BOT_TOKEN = '7258788827:AAHLAZK1vdJOGj_6AAqE9W6B5vUd7mUUJ_4';
 const TELEGRAM_CHAT_ID = '-1003330015301'; // Можно сделать массивом, если нужно слать в несколько чатов
 
+const express = require('express');
 const app = express();
-const port = process.env.PORT || 3000; // Порт, который будет использовать сервер
+const port = process.env.PORT || 3000;
 
-// Используем body-parser, чтобы читать JSON из тела запроса
-app.use(bodyParser.json());
+// Чтобы парсить JSON в теле запроса
+app.use(express.json());
 
-// Главный эндпоинт (URL), на который ваш сайт будет отправлять вебхуки
-app.post('/webhook', (req, res) => {
-    console.log('Получен вебхук:', req.body); // Для отладки
+// Функция для преобразования UTC в московское время и форматирования
+function formatToMoscowTime(utcString) {
+    const date = new Date(utcString);
+    // Московское время = UTC+3
+    const moscowTime = new Date(date.getTime() + 3 * 60 * 60 * 1000);
+    
+    const day = String(moscowTime.getUTCDate()).padStart(2, '0');
+    const month = String(moscowTime.getUTCMonth() + 1).padStart(2, '0');
+    const year = moscowTime.getUTCFullYear();
+    const hours = String(moscowTime.getUTCHours()).padStart(2, '0');
+    const minutes = String(moscowTime.getUTCMinutes()).padStart(2, '0');
+    
+    return `${day}.${month}.${year} ${hours}:${minutes}`;
+}
 
-    // Извлекаем нужные данные из тела запроса (req.body)
-    // ВАЖНО: Названия полей (order_id, amount, customer_name) нужно заменить на те,
-    // которые приходят в вашем вебхуке. Посмотрите их в консоли или на Webhook.site
-    const orderId = req.body.order_id || req.body.id || 'Не указан';
-    const amount = req.body.amount || req.body.price || 'Не указана';
-    const customerName = req.body.customer_name || req.body.name || 'Не указан';
+// Эндпоинт для вебхуков
+app.post('/webhook', async (req, res) => {
+    try {
+        console.log('Получен вебхук:', JSON.stringify(req.body, null, 2));
 
-    // Формируем текст сообщения для Telegram
-    const message = `
-🔔 Новое событие на сайте!
-ID заказа: ${orderId}
-Сумма: ${amount} руб.
-Клиент: ${customerName}
-    `;
+        // Извлекаем данные
+        const payload = req.body;
+        const event = payload.event;
+        
+        // Нас интересует только событие chat.closed
+        if (event !== 'chat.closed') {
+            return res.status(200).send('Ignored');
+        }
 
-    // Формируем URL для отправки сообщения через Telegram Bot API
-    const telegramApiUrl = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
+        const data = payload.data;
+        const conversation = data.conversation;
+        const operator = data.operator;
+        const closeInfo = data.close_info;
 
-    // Опции для HTTP-запроса к Telegram
-    const fetchOptions = {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-            chat_id: TELEGRAM_CHAT_ID,
-            text: message,
-            parse_mode: 'HTML', // Опционально: можно использовать HTML для форматирования
-        }),
-    };
+        // Проверяем, что все нужные поля есть
+        if (!conversation || !operator || !closeInfo) {
+            console.error('Отсутствуют необходимые данные');
+            return res.status(200).send('Missing data'); // всё равно 200, чтобы сайт не мучал повторными отправками
+        }
 
-    // Отправляем запрос в Telegram
-    // Используем fetch (доступен в Node.js 18+). Для старых версий нужно установить node-fetch
-    fetch(telegramApiUrl, fetchOptions)
-        .then(telegramResponse => {
-            if (!telegramResponse.ok) {
-                // Если Telegram вернул ошибку, логируем её
-                return telegramResponse.text().then(text => {
-                    throw new Error(`Telegram API error: ${telegramResponse.status} ${text}`);
-                });
-            }
-            return telegramResponse.json();
-        })
-        .then(data => {
-            console.log('Сообщение в Telegram отправлено:', data);
-            // Отвечаем сайту, что всё хорошо (статус 200)
-            res.status(200).send('OK');
-        })
-        .catch(error => {
-            console.error('Ошибка при отправке в Telegram:', error);
-            // Отвечаем сайту, что произошла ошибка (статус 500)
-            res.status(500).send('Error');
+        const dialogNumber = conversation.dialog_number;
+        const operatorEmail = operator.email || 'email не указан';
+        const closedAtUTC = conversation.closed_at;
+
+        // Преобразуем время
+        const closedAtMoscow = formatToMoscowTime(closedAtUTC);
+
+        // Формируем сообщение
+        const message = `№${dialogNumber} ${operatorEmail} закрыт ${closedAtMoscow}`;
+
+        // Отправляем в Telegram
+        const telegramToken = 'ВАШ_ТОКЕН_БОТА';   // замените
+        const chatId = 'ВАШ_CHAT_ID';            // замените
+        const telegramUrl = `https://api.telegram.org/bot${telegramToken}/sendMessage`;
+
+        const telegramResponse = await fetch(telegramUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                chat_id: chatId,
+                text: message,
+            }),
         });
+
+        if (!telegramResponse.ok) {
+            const errorText = await telegramResponse.text();
+            throw new Error(`Telegram API error: ${telegramResponse.status} ${errorText}`);
+        }
+
+        console.log('Сообщение отправлено в Telegram');
+        res.status(200).send('OK');
+    } catch (error) {
+        console.error('Ошибка при обработке:', error);
+        // Всё равно отвечаем 200, чтобы сайт не пытался переотправить
+        res.status(200).send('Error logged');
+    }
 });
 
-// Запускаем сервер
 app.listen(port, () => {
     console.log(`Бот слушает вебхуки на порту ${port}`);
 });
