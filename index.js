@@ -9,11 +9,9 @@ const port = process.env.PORT || 3000;
 app.use(express.json());
 
 // ---- 1. Настройка базы данных SQLite ----
-// Для Railway: если примонтирован volume к /data, база будет сохраняться между перезапусками
 const dbPath = process.env.DB_PATH || path.join(__dirname, 'stats.db');
 const db = new sqlite3.Database(dbPath);
 
-// Создаём таблицу, если её нет
 db.run(`
     CREATE TABLE IF NOT EXISTS closes (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -39,7 +37,7 @@ function formatToMoscowTime(utcString) {
     return `${day}.${month}.${year} ${hours}:${minutes}`;
 }
 
-// ---- 3. Эндпоинт для вебхуков от вашего сайта (закрытие чата) ----
+// ---- 3. Эндпоинт для вебхуков от сайта (закрытие чата) ----
 app.post('/webhook', async (req, res) => {
     try {
         console.log('Получен вебхук:', JSON.stringify(req.body, null, 2));
@@ -47,7 +45,6 @@ app.post('/webhook', async (req, res) => {
         const payload = req.body;
         const event = payload.event;
         
-        // Нас интересует только chat.closed
         if (event !== 'chat.closed') {
             return res.status(200).send('Ignored');
         }
@@ -67,7 +64,7 @@ app.post('/webhook', async (req, res) => {
         const operatorEmail = operator.email;
         const closedAtUTC = conversation.closed_at;
 
-        // Сохраняем запись в базу данных
+        // Сохраняем в базу
         db.run(
             `INSERT INTO closes (operator_email, dialog_number, conversation_id, closed_at) VALUES (?, ?, ?, ?)`,
             [operatorEmail, dialogNumber, conversationId, closedAtUTC],
@@ -85,8 +82,10 @@ app.post('/webhook', async (req, res) => {
         const chatLink = `https://chat.moneyman.ru/operator/chat/${conversationId}`;
         const messageHtml = `<a href="${chatLink}">№${dialogNumber}</a> ${operatorEmail} закрыт ${closedAtMoscow}`;
 
-        const telegramToken = '7258788827:AAHLAZK1vdJOGj_6AAqE9W6B5vUd7mUUJ_4';   // ваш токен
-        const notifyChatId = '-1003330015301';            // ID чата для уведомлений
+        // Переменные окружения (рекомендуется вынести)
+        const telegramToken = process.env.TELEGRAM_BOT_TOKEN || '7258788827:AAHLAZK1vdJOGj_6AAqE9W6B5vUd7mUUJ_4';
+        const notifyChatId = process.env.NOTIFY_CHAT_ID || '-1003330015301';
+
         const telegramUrl = `https://api.telegram.org/bot${telegramToken}/sendMessage`;
 
         await fetch(telegramUrl, {
@@ -108,7 +107,7 @@ app.post('/webhook', async (req, res) => {
     }
 });
 
-// ---- 4. Эндпоинт для приёма команд от Telegram (вебхук) ----
+// ---- 4. Эндпоинт для приёма команд от Telegram ----
 app.post('/telegram-webhook', async (req, res) => {
     try {
         const update = req.body;
@@ -121,9 +120,8 @@ app.post('/telegram-webhook', async (req, res) => {
         const chatId = update.message.chat.id;
         const text = update.message.text || '';
 
-        // Если команда /stats
+        // Команда /stats
         if (text === '/stats') {
-            // Получаем статистику из БД
             db.all(
                 `SELECT operator_email, COUNT(*) as count FROM closes GROUP BY operator_email ORDER BY count DESC`,
                 [],
@@ -139,7 +137,6 @@ app.post('/telegram-webhook', async (req, res) => {
                         return;
                     }
 
-                    // Формируем сообщение
                     let message = '📊 *Статистика закрытых чатов по операторам:*\n\n';
                     rows.forEach((row, index) => {
                         message += `${index + 1}. ${row.operator_email} — *${row.count}*\n`;
@@ -148,6 +145,25 @@ app.post('/telegram-webhook', async (req, res) => {
                     sendTelegramMessage(chatId, message, { parse_mode: 'Markdown' });
                 }
             );
+        }
+
+        // Команда /clear_stats (доступна только админу)
+        if (text === '/clear_stats') {
+            // ID администратора (вынесите в переменные окружения)
+            const adminId = 241380306;
+            if (chatId !== adminId) {
+                sendTelegramMessage(chatId, '⛔ Недостаточно прав для очистки статистики.');
+                return res.status(200).send('OK');
+            }
+
+            db.run("DELETE FROM closes", function(err) {
+                if (err) {
+                    console.error('Ошибка очистки БД:', err);
+                    sendTelegramMessage(chatId, '❌ Ошибка при очистке статистики.');
+                } else {
+                    sendTelegramMessage(chatId, `✅ Статистика очищена. Удалено записей: ${this.changes}`);
+                }
+            });
         }
 
         res.status(200).send('OK');
@@ -159,7 +175,7 @@ app.post('/telegram-webhook', async (req, res) => {
 
 // Вспомогательная функция для отправки сообщений в Telegram
 async function sendTelegramMessage(chatId, text, options = {}) {
-    const telegramToken = '7258788827:AAHLAZK1vdJOGj_6AAqE9W6B5vUd7mUUJ_4';
+    const telegramToken = process.env.TELEGRAM_BOT_TOKEN || '7258788827:AAHLAZK1vdJOGj_6AAqE9W6B5vUd7mUUJ_4';
     const url = `https://api.telegram.org/bot${telegramToken}/sendMessage`;
     const payload = {
         chat_id: chatId,
@@ -181,8 +197,8 @@ async function sendTelegramMessage(chatId, text, options = {}) {
 app.listen(port, async () => {
     console.log(`Бот слушает вебхуки на порту ${port}`);
 
-    // Устанавливаем вебхук для Telegram (можно сделать один раз вручную)
-    const telegramToken = '7258788827:AAHLAZK1vdJOGj_6AAqE9W6B5vUd7mUUJ_4';
+    // Устанавливаем вебхук для Telegram (можно сделать один раз вручную, но автоматизируем)
+    const telegramToken = process.env.TELEGRAM_BOT_TOKEN || '7258788827:AAHLAZK1vdJOGj_6AAqE9W6B5vUd7mUUJ_4';
     const webhookUrl = `https://${process.env.RAILWAY_PUBLIC_DOMAIN || 'your-domain.com'}/telegram-webhook`;
     const setWebhookUrl = `https://api.telegram.org/bot${telegramToken}/setWebhook?url=${webhookUrl}`;
 
