@@ -217,7 +217,7 @@ app.post('/telegram-webhook', async (req, res) => {
                             return;
                         }
 
-                        let message = '📊 *Статистика закрытых чатов (подробные):*\n\n';
+                        let message = '📊 *Закрытых чатов:*\n\n';
                         rows.forEach((row, index) => {
                             message += `${index + 1}. ${row.operator_email} — *${row.count}*\n`;
                         });
@@ -245,8 +245,8 @@ app.post('/telegram-webhook', async (req, res) => {
                             return;
                         }
 
-                        let assignedMsg = '📊 *Назначения:*\n';
-                        let closedMsg = '📊 *Закрытия (короткие):*\n';
+                        let assignedMsg = '📊 *Назначено:*\n';
+                        let closedMsg = '📊 *Закрыто:*\n';
                         let hasAssigned = false, hasClosed = false;
 
                         rows.forEach((row, index) => {
