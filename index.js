@@ -165,7 +165,7 @@ app.post('/webhook', async (req, res) => {
 
                 const { date, time } = formatToMoscowTime(timestamp);
                 const message = `${operator_name} ${conversation_id} закрыт ${date} ${time}`;
-                const assignedChatId = process.env.ASSIGNED_CHAT_ID || '-5215568998';
+                const assignedChatId = process.env.ASSIGNED_CHAT_ID || '-1003699948179';
                 await sendTelegramMessage(assignedChatId, message);
                 console.log('Уведомление о закрытии (короткое) отправлено');
                 return res.status(200).send('OK');
@@ -195,7 +195,7 @@ app.post('/telegram-webhook', async (req, res) => {
 
         // ID чатов (значения по умолчанию)
         const notifyChatId = process.env.NOTIFY_CHAT_ID || '-1003330015301';
-        const assignedChatId = process.env.ASSIGNED_CHAT_ID || '-5215568998';
+        const assignedChatId = process.env.ASSIGNED_CHAT_ID || '-1003699948179';
         const adminId = parseInt(process.env.ADMIN_ID || '241380306', 10);
 
         // Команда /stats
