@@ -101,7 +101,7 @@ app.post('/webhook', async (req, res) => {
             const { date, time } = formatToMoscowTime(timestamp);
             const message = `${operator_name} ${conversation_id} назначен ${date} ${time}`;
             // ID нового чата (значение по умолчанию)
-            const assignedChatId = process.env.ASSIGNED_CHAT_ID || '-5215568998';
+            const assignedChatId = process.env.ASSIGNED_CHAT_ID || '-1003699948179';
             await sendTelegramMessage(assignedChatId, message);
             console.log('Уведомление о назначении отправлено');
             return res.status(200).send('OK');
